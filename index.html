@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ki Full Katai - Dashboard de Exámenes</title>
+    <meta name="description" content="Sistema de seguimiento de exámenes de artes marciales Ki Full Katai">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+    <!-- jsPDF for PDF export -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+</head>
+
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="container">
+            <div class="header-content">
+                <h1 class="logo">
+                    <span class="logo-ki">KI FULL</span>
+                    <span class="logo-katai">KATAI</span>
+                </h1>
+                <p class="tagline">El Arte del Saber Combatir Aprendiendo a Ser Uno Mismo</p>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="main-container">
+        <div class="container">
+
+            <!-- Welcome/Registration View -->
+            <section id="welcomeView" class="view active">
+                <div class="welcome-card">
+                    <h2 class="section-title">Bienvenido al Sistema de Exámenes</h2>
+                    <p class="section-description">Registra tu progreso hacia el siguiente nivel de cinturón</p>
+
+                    <form id="registrationForm" class="registration-form">
+                        <div class="form-group">
+                            <label for="nombre">Nombre</label>
+                            <input type="text" id="nombre" required placeholder="Tu nombre">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="apellidos">Apellidos</label>
+                            <input type="text" id="apellidos" required placeholder="Tus apellidos">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="cinturon">Cinturón al que Optas</label>
+                            <select id="cinturon" required>
+                                <option value="">Selecciona tu cinturón objetivo...</option>
+                                <option value="amarillo">🟡 Amarillo</option>
+                                <option value="naranja">🟠 Naranja</option>
+                                <option value="verde">🟢 Verde</option>
+                                <option value="azul">🔵 Azul</option>
+                                <option value="marron">🟤 Marrón</option>
+                                <option value="negro">⚫ Negro (1º Dan)</option>
+                                <option value="negro-2dan">🔴 Negro 2º Dan (Tigre Rojo)</option>
+                            </select>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary">Comenzar Mi Entrenamiento</button>
+                    </form>
+
+                    <div class="admin-access">
+                        <button id="btnAdminAccess" class="btn btn-ghost">Acceso Administrador</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Student Dashboard -->
+            <section id="studentView" class="view">
+                <div class="student-header">
+                    <div class="student-info">
+                        <h2 id="studentName" class="student-name"></h2>
+                        <div class="belt-badge" id="studentBelt"></div>
+                    </div>
+                    <button id="btnLogout" class="btn btn-ghost">Cerrar Sesión</button>
+                </div>
+
+                <!-- Tabs Navigation -->
+                <div class="tabs">
+                    <button class="tab-btn active" data-tab="registro">📝 Registro Diario</button>
+                    <button class="tab-btn" data-tab="progreso">📊 Mi Progreso</button>
+                    <button class="tab-btn" data-tab="tecnicas">🥋 Guía de Técnicas</button>
+                    <button class="tab-btn" data-tab="requisitos">📋 Requisitos por Cinturón</button>
+                </div>
+
+                <!-- Tab: Daily Registration -->
+                <div id="tabRegistro" class="tab-content active">
+                    <div class="card">
+                        <h3 class="card-title">Registrar Ejercicios del Día</h3>
+                        <p class="card-description">Ingresa las repeticiones completadas hoy para cada técnica</p>
+
+                        <form id="dailyLogForm" class="daily-log-form">
+                            <div id="exerciseInputs" class="exercise-inputs"></div>
+
+                            <button type="submit" class="btn btn-primary">Guardar Progreso</button>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Tab: Progress -->
+                <div id="tabProgreso" class="tab-content">
+                    <div class="progress-overview">
+                        <div class="progress-summary-card">
+                            <div class="progress-header">
+                                <h3>Resumen General</h3>
+                                <button id="btnDownloadPDF" class="btn btn-secondary">
+                                    📥 Descargar Progreso PDF
+                                </button>
+                            </div>
+                            <div class="overall-progress">
+                                <div class="progress-circle">
+                                    <svg width="120" height="120">
+                                        <circle cx="60" cy="60" r="50" stroke="#1a1a2e" stroke-width="10" fill="none" />
+                                        <circle id="progressCircle" cx="60" cy="60" r="50" stroke="url(#gradient)"
+                                            stroke-width="10" fill="none" stroke-dasharray="314" stroke-dashoffset="314"
+                                            transform="rotate(-90 60 60)" />
+                                        <defs>
+                                            <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                                                <stop offset="0%" stop-color="#f4a500" />
+                                                <stop offset="100%" stop-color="#d68f00" />
+                                            </linearGradient>
+                                        </defs>
+                                    </svg>
+                                    <div class="progress-percentage" id="overallPercentage">0%</div>
+                                </div>
+                                <div class="progress-stats">
+                                    <div class="stat">
+                                        <span class="stat-label">Total Completado</span>
+                                        <span class="stat-value" id="totalCompleted">0</span>
+                                    </div>
+                                    <div class="stat">
+                                        <span class="stat-label">Total Requerido</span>
+                                        <span class="stat-value" id="totalRequired">0</span>
+                                    </div>
+                                    <div class="stat">
+                                        <span class="stat-label">Pendientes</span>
+                                        <span class="stat-value" id="totalPending">0</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <h3 class="card-title">Progreso por Técnica</h3>
+                        <div id="progressDetails" class="progress-details"></div>
+                    </div>
+                </div>
+
+                <!-- Tab: Techniques Guide -->
+                <div id="tabTecnicas" class="tab-content">
+                    <div class="card">
+                        <h3 class="card-title">Guía de Técnicas Ki Full Katai</h3>
+                        <p class="card-description">Consulta las ilustraciones y descripciones de cada técnica</p>
+
+                        <div class="techniques-gallery">
+                            <img src="tecnicas-2.png" alt="Técnicas Ki Full Katai - Parte 1" class="technique-image">
+                            <img src="tecnicas-1.png" alt="Técnicas Ki Full Katai - Parte 2" class="technique-image">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab: Belt Requirements -->
+                <div id="tabRequisitos" class="tab-content">
+                    <div class="card">
+                        <h3>Requisitos por Cinturón</h3>
+                        <p class="card-description">Repeticiones requeridas por pierna para cada cinturón</p>
+
+                        <div class="requirements-table-container">
+                            <table class="requirements-table">
+                                <thead>
+                                    <tr>
+                                        <th>Cinturón</th>
+                                        <th>Mae Geri</th>
+                                        <th>Mawashi Geri</th>
+                                        <th>Yoko Geri</th>
+                                        <th>Ura Mawashi</th>
+                                        <th>Ushiro Geri</th>
+                                        <th>Ushiro Mawashi</th>
+                                        <th>Uchi Keage</th>
+                                        <th>Soto Keage</th>
+                                        <th>Kakato Geri</th>
+                                        <th>Lock Kick</th>
+                                        <th class="total-column">Total/Pierna</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr class="belt-row amarillo">
+                                        <td class="belt-cell">🟡 Amarillo</td>
+                                        <td>1,000</td>
+                                        <td>1,000</td>
+                                        <td>1,000</td>
+                                        <td>1,000</td>
+                                        <td>500</td>
+                                        <td>500</td>
+                                        <td>500</td>
+                                        <td>500</td>
+                                        <td>500</td>
+                                        <td>500</td>
+                                        <td class="total-cell">7,000</td>
+                                    </tr>
+                                    <tr class="belt-row naranja">
+                                        <td class="belt-cell">🟠 Naranja</td>
+                                        <td>2,000</td>
+                                        <td>2,000</td>
+                                        <td>2,000</td>
+                                        <td>2,000</td>
+                                        <td>1,000</td>
+                                        <td>1,000</td>
+                                        <td>1,000</td>
+                                        <td>1,000</td>
+                                        <td>1,000</td>
+                                        <td>1,000</td>
+                                        <td class="total-cell">14,000</td>
+                                    </tr>
+                                    <tr class="belt-row verde">
+                                        <td class="belt-cell">🟢 Verde</td>
+                                        <td>3,000</td>
+                                        <td>3,000</td>
+                                        <td>3,000</td>
+                                        <td>3,000</td>
+                                        <td>2,000</td>
+                                        <td>2,000</td>
+                                        <td>2,000</td>
+                                        <td>2,000</td>
+                                        <td>2,000</td>
+                                        <td>2,000</td>
+                                        <td class="total-cell">24,000</td>
+                                    </tr>
+                                    <tr class="belt-row azul">
+                                        <td class="belt-cell">🔵 Azul</td>
+                                        <td>4,000</td>
+                                        <td>4,000</td>
+                                        <td>4,000</td>
+                                        <td>4,000</td>
+                                        <td>4,000</td>
+                                        <td>4,000</td>
+                                        <td>4,000</td>
+                                        <td>4,000</td>
+                                        <td>4,000</td>
+                                        <td>4,000</td>
+                                        <td class="total-cell">40,000</td>
+                                    </tr>
+                                    <tr class="belt-row marron">
+                                        <td class="belt-cell">🟤 Marrón</td>
+                                        <td>6,000</td>
+                                        <td>6,000</td>
+                                        <td>6,000</td>
+                                        <td>6,000</td>
+                                        <td>6,000</td>
+                                        <td>6,000</td>
+                                        <td>6,000</td>
+                                        <td>6,000</td>
+                                        <td>6,000</td>
+                                        <td>6,000</td>
+                                        <td class="total-cell">60,000</td>
+                                    </tr>
+                                    <tr class="belt-row negro">
+                                        <td class="belt-cell">⚫ Negro 1º Dan</td>
+                                        <td>7,200</td>
+                                        <td>7,200</td>
+                                        <td>7,200</td>
+                                        <td>7,200</td>
+                                        <td>7,200</td>
+                                        <td>7,200</td>
+                                        <td>7,200</td>
+                                        <td>7,200</td>
+                                        <td>7,200</td>
+                                        <td>7,200</td>
+                                        <td class="total-cell">72,000</td>
+                                    </tr>
+                                    <tr class="belt-row negro-2dan">
+                                        <td class="belt-cell">🔴 Negro 2º Dan</td>
+                                        <td>12,000</td>
+                                        <td>12,000</td>
+                                        <td>12,000</td>
+                                        <td>12,000</td>
+                                        <td>12,000</td>
+                                        <td>12,000</td>
+                                        <td>12,000</td>
+                                        <td>12,000</td>
+                                        <td>12,000</td>
+                                        <td>12,000</td>
+                                        <td class="total-cell">120,000</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="requirements-note">
+                            <p><strong>💡 Nota:</strong> Estos valores son las repeticiones requeridas <strong>por
+                                    pierna</strong> (izquierda y derecha por separado). El total para ambas piernas es
+                                el doble.</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Admin View -->
+            <section id="adminView" class="view">
+                <div class="admin-header">
+                    <h2 class="section-title">Panel de Administrador</h2>
+                    <button id="btnAdminLogout" class="btn btn-ghost">Salir del Panel</button>
+                </div>
+
+                <div class="admin-controls">
+                    <div class="form-group">
+                        <label for="filterBelt">Filtrar por Cinturón</label>
+                        <select id="filterBelt">
+                            <option value="">Todos los cinturones</option>
+                            <option value="amarillo">🟡 Amarillo</option>
+                            <option value="naranja">🟠 Naranja</option>
+                            <option value="verde">🟢 Verde</option>
+                            <option value="azul">🔵 Azul</option>
+                            <option value="marron">🟤 Marrón</option>
+                            <option value="negro">⚫ Negro (1º Dan)</option>
+                            <option value="negro-2dan">🔴 Negro 2º Dan (Tigre Rojo)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h3 class="card-title">Progreso de Todos los Estudiantes</h3>
+                    <div id="allStudentsProgress" class="students-table-container">
+                        <p class="empty-state">No hay estudiantes registrados aún</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Admin Login Modal -->
+            <div id="adminLoginModal" class="modal">
+                <div class="modal-content">
+                    <h3>Acceso Administrador</h3>
+                    <form id="adminLoginForm">
+                        <div class="form-group">
+                            <label for="adminPassword">Contraseña</label>
+                            <input type="password" id="adminPassword" required placeholder="Ingresa la contraseña">
+                        </div>
+                        <div class="modal-actions">
+                            <button type="button" id="btnCancelAdmin" class="btn btn-ghost">Cancelar</button>
+                            <button type="submit" class="btn btn-primary">Ingresar</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <p>&copy; 2026 Álvaro Navarro Mingorance y Mario Padilla®</p>
+            <p style="margin-top: 0.5rem; font-size: 0.875rem;">
+                <a href="https://creativecommons.org/licenses/by-nc/4.0/" target="_blank" rel="noopener noreferrer"
+                    style="color: #f4a500; text-decoration: none;">
+                    <span style="margin-right: 0.25rem;">📄</span>Licencia Creative Commons BY-NC 4.0
+                </a> - Uso no comercial
+            </p>
+        </div>
+    </footer>
+
+    <!-- Success Toast -->
+    <div id="toast" class="toast"></div>
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="loading-overlay">
+        <div class="loading-spinner"></div>
+        <p>Conectando con Firebase...</p>
+    </div>
+
+    <script type="module" src="app.js"></script>
+</body>
+
+</html>
