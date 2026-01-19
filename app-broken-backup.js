@@ -1,5 +1,5 @@
 // ===================================
-// Firebase Integration & Imports
+// Firebase Integration & Constants
 // ===================================
 
 import { db, auth } from './firebase-config.js';
@@ -19,9 +19,9 @@ import {
     signOut
 } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
 
-// Admin credentials
+// Admin email for Firebase Authentication
 const ADMIN_EMAIL = 'admin@kifull.com';
-const ADMIN_PASSWORD = 'kifull2026';
+
 
 // Exercise definitions with descriptions
 const EXERCISES = [
@@ -198,221 +198,89 @@ const BELT_NAMES = {
 };
 
 // ===================================
-// State Management
+// State Management  
 // ===================================
 
 let currentStudent = null;
 let allStudents = [];
+let studentsUnsubscribe = null;
 
-// Load students from localStorage
+// Loading UI helpers
+function showLoading(message = 'Cargando...') {
+    const overlay = document.getElementById('loadingOverlay');
+    if (overlay) {
+        overlay.querySelector('p').textContent = message;
+        overlay.classList.add('show');
+    }
+}
+
+function hideLoading() {
+    const overlay = document.getElementById('loadingOverlay');
+    if (overlay) {
+        overlay.classList.remove('show');
+    }
+}
+
+// Load students from Firestore (real-time)
 function loadStudents() {
-    const stored = localStorage.getItem('kifull_students');
-    if (stored) {
-        allStudents = JSON.parse(stored);
-    }
-}
+    showLoading('Cargando estudiantes...');
 
-// Save students to localStorage
-function saveStudents() {
-    localStorage.setItem('kifull_students', JSON.stringify(allStudents));
-}
-// ===================================
-// Session Management System
-// ===================================
+    const q = query(collection(db, 'students'), orderBy('fechaRegistro', 'desc'));
 
-// Login existing student by email
-async function loginStudent(email) {
-    const emailLower = email.toLowerCase().trim();
-    const studentsRef = collection(db, 'students');
-    const q = query(studentsRef, where('email', '==', emailLower));
-
-    try {
-        const querySnapshot = await getDocs(q);
-
-        if (querySnapshot.empty) {
-            showToast('Email no encontrado. ¿Necesitas registrarte?');
-            return null;
-        }
-
-        const studentDoc = querySnapshot.docs[0];
-        return {
-            firestoreId: studentDoc.id,
-            ...studentDoc.data()
-        };
-    } catch (error) {
-        console.error('Error en login:', error);
-        showToast('Error al iniciar sesión');
-        return null;
-    }
-}
-
-// Register new student with email (must be unique)
-async function registerStudentWithEmail(nombre, apellidos, email, cinturon) {
-    const emailLower = email.toLowerCase().trim();
-    const studentsRef = collection(db, 'students');
-    const q = query(studentsRef, where('email', '==', emailLower));
-
-    try {
-        // Check if email exists
-        const querySnapshot = await getDocs(q);
-        if (!querySnapshot.empty) {
-            showToast('Este email ya está registrado');
-            return null;
-        }
-
-        // Create student with totalRepeticiones structure
-        const requirements = BELT_REQUIREMENTS[cinturon];
-        const totalRepeticiones = {};
-
-        Object.keys(requirements).forEach(exerciseId => {
-            totalRepeticiones[exerciseId] = { izquierda: 0, derecha: 0 };
-        });
-
-        const newStudent = {
-            nombre,
-            apellidos,
-            email: emailLower,
-            cinturon,
-            fechaRegistro: new Date().toISOString(),
-            totalRepeticiones
-        };
-
-        const docRef = await addDoc(studentsRef, newStudent);
-        showToast('¡Registro exitoso!');
-
-        return {
-            firestoreId: docRef.id,
-            ...newStudent
-        };
-    } catch (error) {
-        console.error('Error en registro:', error);
-        showToast('Error al registrar');
-        return null;
-    }
-}
-
-// Create training session and update student totals
-async function createTrainingSession(studentId, repeticiones) {
-    try {
-        const sessionData = {
-            fecha: new Date().toISOString(),
-            repeticiones
-        };
-
-        // Add session to subcollection
-        const sessionsRef = collection(db, 'students', studentId, 'sessions');
-        await addDoc(sessionsRef, sessionData);
-
-        // Update student's total repetitions
-        const studentRef = doc(db, 'students', studentId);
-        const newTotals = { ...currentStudent.totalRepeticiones };
-
-        Object.keys(repeticiones).forEach(exerciseId => {
-            if (!newTotals[exerciseId]) {
-                newTotals[exerciseId] = { izquierda: 0, derecha: 0 };
-            }
-            newTotals[exerciseId].izquierda += repeticiones[exerciseId].izquierda || 0;
-            newTotals[exerciseId].derecha += repeticiones[exerciseId].derecha || 0;
-        });
-
-        await updateDoc(studentRef, { totalRepeticiones: newTotals });
-
-        // Update local state
-        currentStudent.totalRepeticiones = newTotals;
-
-        showToast('¡Sesión guardada exitosamente! 🎉');
-        return true;
-    } catch (error) {
-        console.error('Error al crear sesión:', error);
-        showToast('Error al guardar la sesión');
-        return false;
-    }
-}
-
-// Get all sessions for a student
-async function getStudentSessions(studentId) {
-    try {
-        const sessionsRef = collection(db, 'students', studentId, 'sessions');
-        const q = query(sessionsRef, orderBy('fecha', 'desc'));
-        const querySnapshot = await getDocs(q);
-
-        const sessions = [];
-        querySnapshot.forEach((doc) => {
-            sessions.push({
-                id: doc.id,
+    studentsUnsubscribe = onSnapshot(q, (snapshot) => {
+        allStudents = [];
+        snapshot.forEach((doc) => {
+            allStudents.push({
+                firestoreId: doc.id,
                 ...doc.data()
             });
         });
 
-        return sessions;
+        // Update admin view if it's currently showing
+        if (document.getElementById('adminView').classList.contains('active')) {
+            renderAllStudentsProgress();
+        }
+
+        hideLoading();
+    }, (error) => {
+        console.error('Error loading students:', error);
+        showToast('Error al cargar estudiantes');
+        hideLoading();
+    });
+}
+
+// Save/Update student in Firestore
+async function saveStudent(student) {
+    try {
+        if (student.firestoreId) {
+            // Update existing
+            await updateDoc(doc(db, 'students', student.firestoreId), {
+                ejercicios: student.ejercicios
+            });
+        } else {
+            // Create new
+            const docRef = await addDoc(collection(db, 'students'), {
+                nombre: student.nombre,
+                apellidos: student.apellidos,
+                cinturon: student.cinturon,
+                fechaRegistro: student.fechaRegistro,
+                ejercicios: student.ejercicios
+            });
+            student.firestoreId = docRef.id;
+        }
     } catch (error) {
-        console.error('Error al obtener sesiones:', error);
-        return [];
+        console.error('Error saving student:', error);
+        showToast('Error al guardar datos');
     }
 }
-
-// Render sessions history
-function renderSessionsHistory(sessions) {
-    const container = document.getElementById('sessionsList');
-
-    if (!sessions || sessions.length === 0) {
-        container.innerHTML = `
-            <div class="empty-state">
-                <p>📅 Aún no has registrado ninguna sesión</p>
-                <p>Crea tu primera sesión en la pestaña "Nueva Sesión"</p>
-            </div>
-        `;
-        return;
-    }
-
-    container.innerHTML = sessions.map(session => {
-        const date = new Date(session.fecha);
-        const formattedDate = date.toLocaleString('es-ES', {
-            day: '2-digit',
-            month: '2-digit',
-            year: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit'
-        });
-
-        let totalSession = 0;
-        const techniquesList = Object.entries(session.repeticiones).map(([id, reps]) => {
-            const exercise = EXERCISES.find(ex => ex.id === id);
-            const total = (reps.izquierda || 0) + (reps.derecha || 0);
-            totalSession += total;
-            return `
-                <div class="session-technique">
-                    <strong>${exercise?.name || id}:</strong> 
-                    ${reps.izquierda} + ${reps.derecha} = ${total}
-                </div>
-            `;
-        }).join('');
-
-        return `
-            <div class="session-card">
-                <div class="session-header">
-                    <div class="session-date">📅 ${formattedDate}</div>
-                    <div class="session-total">Total: ${totalSession.toLocaleString('es-ES')} reps</div>
-                </div>
-                <div class="session-techniques">
-                    ${techniquesList}
-                </div>
-            </div>
-        `;
-    }).join('');
-}
-
-
-// ===================================
-// Session Management System
-// ===================================
-
 
 // ===================================
 // Student Management
 // ===================================
 
-function createStudent(nombre, apellidos, cinturon) {
+async function createStudent(nombre, apellidos, cinturon) {
+    showLoading('Registrando estudiante...');
+
     const student = {
         id: Date.now(),
         nombre,
@@ -430,8 +298,9 @@ function createStudent(nombre, apellidos, cinturon) {
         };
     });
 
+    await saveStudent(student);
     allStudents.push(student);
-    saveStudents();
+    hideLoading();
     return student;
 }
 
@@ -476,14 +345,45 @@ function showToast(message) {
 }
 
 // ===================================
-// Auth Toggle Handler
+// Registration Form
 // ===================================
 
+// ===================================
+// Tab Navigation Handler
+// ===================================
+document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+        const tabId = btn.dataset.tab;
+
+        // Update active button
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+
+        // Hide all tabs
+        document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
+
+        // Show selected tab
+        const selectedTab = document.getElementById(`tab${tabId.charAt(0).toUpperCase() + tabId.slice(1)}`);
+        if (selectedTab) {
+            selectedTab.classList.add('active');
+
+            // Load sessions when historial tab is clicked
+            if (tabId === 'historial' && currentStudent) {
+                const sessions = await getStudentSessions(currentStudent.firestoreId);
+                renderSessionsHistory(sessions);
+            }
+        }
+    });
+});
+
+// ===================================
+// Auth Toggle Handler
+// ===================================
 document.querySelectorAll('.auth-toggle-btn').forEach(btn => {
     btn.addEventListener('click', () => {
         const mode = btn.dataset.mode;
 
-        // Update active state
+        // Update active button
         document.querySelectorAll('.auth-toggle-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
 
@@ -501,7 +401,6 @@ document.querySelectorAll('.auth-toggle-btn').forEach(btn => {
 // ===================================
 // Login Form Handler
 // ===================================
-
 document.getElementById('loginForm').addEventListener('submit', async (e) => {
     e.preventDefault();
 
@@ -517,9 +416,10 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
     if (student) {
         currentStudent = student;
         document.getElementById('studentName').textContent = `${student.nombre} ${student.apellidos}`;
-        document.getElementById('studentBelt').textContent = `${BELT_EMOJIS[student.cinturon]} ${BELT_NAMES[student.cinturon]}`;
+        document.getElementById('studentBelt').textContent = BELT_LABELS[student.cinturon];
+        document.getElementById('studentBelt').className = `belt-badge belt-${student.cinturon}`;
 
-        renderExerciseInputs();
+        renderDailyLog();
         renderProgress();
 
         // Load sessions
@@ -532,9 +432,8 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
 });
 
 // ===================================
-// Register Form Handler
+// Register Form Handler 
 // ===================================
-
 document.getElementById('registerForm').addEventListener('submit', async (e) => {
     e.preventDefault();
 
@@ -553,9 +452,10 @@ document.getElementById('registerForm').addEventListener('submit', async (e) => 
     if (student) {
         currentStudent = student;
         document.getElementById('studentName').textContent = `${student.nombre} ${student.apellidos}`;
-        document.getElementById('studentBelt').textContent = `${BELT_EMOJIS[student.cinturon]} ${BELT_NAMES[student.cinturon]}`;
+        document.getElementById('studentBelt').textContent = BELT_LABELS[student.cinturon];
+        document.getElementById('studentBelt').className = `belt-badge belt-${student.cinturon}`;
 
-        renderExerciseInputs();
+        renderDailyLog();
         renderProgress();
         renderSessionsHistory([]);
 
@@ -621,13 +521,11 @@ function renderExerciseInputs() {
     `).join('');
 }
 
-// Daily log form submission - CREATE SESSION
+// Daily log form submission
 document.getElementById('dailyLogForm').addEventListener('submit', async (e) => {
     e.preventDefault();
 
-    if (!currentStudent) return;
-
-    const repeticiones = {};
+    const fecha = new Date().toISOString();
     let totalAdded = 0;
 
     EXERCISES.forEach(exercise => {
@@ -649,20 +547,21 @@ document.getElementById('dailyLogForm').addEventListener('submit', async (e) => 
         if (success) {
             renderProgress();
 
-            // Reload sessions
+            // Reload sessions if on historial tab
             const sessions = await getStudentSessions(currentStudent.firestoreId);
             renderSessionsHistory(sessions);
 
             // Clear form
             EXERCISES.forEach(exercise => {
-                document.getElementById(`input-${exercise.id}-izquierda`).value = '';
-                document.getElementById(`input-${exercise.id}-derecha`).value = '';
+                document.getElementById(`${exercise.id}-izq`).value = '';
+                document.getElementById(`${exercise.id}-der`).value = '';
             });
         }
     } else {
         showToast('Por favor, ingresa al menos una repetición.');
     }
 });
+
 
 // ===================================
 // Progress Visualization
@@ -708,42 +607,16 @@ function renderProgressDetails() {
     const requirements = BELT_REQUIREMENTS[currentStudent.cinturon];
 
     container.innerHTML = EXERCISES.map(exercise => {
-        const repeticiones = currentStudent.totalRepeticiones[exercise.id] || { izquierda: 0, derecha: 0 };
-        const requirement = requirements[exercise.id];
-
-        const izquierdaPercentage = Math.min(100, Math.round(((repeticiones.izquierda || 0) / requirement) * 100));
-        const derechaPercentage = Math.min(100, Math.round(((repeticiones.derecha || 0) / requirement) * 100));
-
-        const averagePercentage = Math.round((izquierdaPercentage + derechaPercentage) / 2);
-
-        return `
-            <div class="exercise-progress">
-                <div class="exercise-progress-header">
-                    <span class="exercise-progress-name">${exercise.fullName}</span>
-                    <span class="exercise-progress-percentage">${averagePercentage}%</span>
-                </div>
-                
-                <div class="leg-progress">
-                    <div class="leg-label">
-                        <span>Pierna Izquierda</span>
-                        <span>${(repeticiones.izquierda || 0).toLocaleString()} / ${requirement.toLocaleString()}</span>
-                    </div>
-                    <div class="progress-bar">
-                        <div class="progress-bar-fill" style="width: ${izquierdaPercentage}%"></div>
-                    </div>
-                </div>
-                
-                <div class="leg-progress">
                     <div class="leg-label">
                         <span>Pierna Derecha</span>
-                        <span>${(repeticiones.derecha || 0).toLocaleString()} / ${requirement.toLocaleString()}</span>
+                        <span>${ejercicioData.derecha.total.toLocaleString()} / ${requirement.toLocaleString()}</span>
                     </div>
                     <div class="progress-bar">
                         <div class="progress-bar-fill" style="width: ${derechaPercentage}%"></div>
                     </div>
-                </div>
-            </div>
-        `;
+                </div >
+            </div >
+            `;
     }).join('');
 }
 
@@ -760,19 +633,29 @@ document.getElementById('btnCancelAdmin').addEventListener('click', () => {
     document.getElementById('adminPassword').value = '';
 });
 
-document.getElementById('adminLoginForm').addEventListener('submit', (e) => {
+document.getElementById('adminLoginForm').addEventListener('submit', async (e) => {
     e.preventDefault();
 
     const password = document.getElementById('adminPassword').value;
 
-    if (password === ADMIN_PASSWORD) {
+    showLoading('Autenticando...');
+
+    try {
+        // Sign in with Firebase Auth
+        await signInWithEmailAndPassword(auth, ADMIN_EMAIL, password);
+
+        // Login successful
         document.getElementById('adminLoginModal').classList.remove('active');
         document.getElementById('adminPassword').value = '';
         showView('adminView');
         renderAllStudentsProgress();
-    } else {
+        hideLoading();
+        showToast('Acceso concedido');
+    } catch (error) {
+        console.error('Authentication error:', error);
         showToast('Contraseña incorrecta');
         document.getElementById('adminPassword').value = '';
+        hideLoading();
     }
 });
 
@@ -795,7 +678,7 @@ function renderAllStudentsProgress() {
     }
 
     const tableHTML = `
-        <table class="students-table">
+            < table class="students-table" >
             <thead>
                 <tr>
                     <th>Estudiante</th>
@@ -836,8 +719,8 @@ function renderAllStudentsProgress() {
                     `;
     }).join('')}
             </tbody>
-        </table>
-    `;
+        </table >
+            `;
 
     container.innerHTML = tableHTML;
 }
@@ -845,23 +728,6 @@ function renderAllStudentsProgress() {
 // Filter change event
 document.getElementById('filterBelt').addEventListener('change', () => {
     renderAllStudentsProgress();
-});
-
-// ===================================
-// Tab Navigation
-// ===================================
-
-document.querySelectorAll('.tab-btn').forEach(btn => {
-    btn.addEventListener('click', async () => {
-        const tabName = btn.getAttribute('data-tab');
-        showTab(tabName);
-
-        // Load sessions when switching to historial tab
-        if (tabName === 'historial' && currentStudent) {
-            const sessions = await getStudentSessions(currentStudent.firestoreId);
-            renderSessionsHistory(sessions);
-        }
-    });
 });
 
 // ===================================
@@ -879,6 +745,400 @@ document.getElementById('btnLogout').addEventListener('click', () => {
 // ===================================
 
 document.addEventListener('DOMContentLoaded', () => {
+    // Load students from Firestore (sets up real-time listener)
     loadStudents();
     showView('welcomeView');
 });
+
+// ===================================
+// Helper Function for Progress Calculation
+// ===================================
+function calculateOverallProgress(student) {
+    let totalCompleted = 0;
+    let totalRequired = 0;
+
+    EXERCISES.forEach(exercise => {
+        const exerciseData = student.ejercicios[exercise.id] || { izquierda: 0, derecha: 0 };
+        totalCompleted += (exerciseData.izquierda || 0) + (exerciseData.derecha || 0);
+
+        const required = BELT_REQUIREMENTS[student.cinturon][exercise.id] || 0;
+        totalRequired += required * 2; // Both legs
+    });
+
+    const percentage = totalRequired > 0
+        ? Math.min(100, Math.round((totalCompleted / totalRequired) * 100))
+        : 0;
+
+    return {
+        percentage,
+        completed: totalCompleted,
+        required: totalRequired,
+        pending: Math.max(0, totalRequired - totalCompleted)
+    };
+}
+
+// ===================================
+// PDF Export Functionality
+// ===================================
+document.getElementById('btnDownloadPDF')?.addEventListener('click', async function () {
+    if (!currentStudent) return;
+
+    try {
+        showLoading();
+
+        // Access jsPDF from global window object
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF();
+
+        // Header with logo/title
+        doc.setFillColor(244, 165, 0);
+        doc.rect(0, 0, 210, 40, 'F');
+
+        doc.setTextColor(26, 26, 46);
+        doc.setFontSize(24);
+        doc.setFont(undefined, 'bold');
+        doc.text('Ki Full Katai', 105, 15, { align: 'center' });
+
+        doc.setFontSize(14);
+        doc.setFont(undefined, 'normal');
+        doc.text('Reporte de Progreso del Estudiante', 105, 25, { align: 'center' });
+
+        doc.setFontSize(10);
+        doc.text(`Fecha: ${ new Date().toLocaleDateString('es-ES') } `, 105, 33, { align: 'center' });
+
+        // Student Information
+        doc.setTextColor(60, 60, 60);
+        doc.setFontSize(12);
+        doc.setFont(undefined, 'bold');
+        doc.text('Información del Estudiante', 14, 50);
+
+        doc.setFont(undefined, 'normal');
+        doc.setFontSize(11);
+        doc.text(`Nombre: ${ currentStudent.nombre } ${ currentStudent.apellidos } `, 14, 58);
+
+        const beltEmojis = {
+            'amarillo': '🟡',
+            'naranja': '🟠',
+            'verde': '🟢',
+            'azul': '🔵',
+            'marron': '🟤',
+            'negro': '⚫',
+            'negro-2dan': '🔴'
+        };
+
+        const beltNames = {
+            'amarillo': 'Amarillo',
+            'naranja': 'Naranja',
+            'verde': 'Verde',
+            'azul': 'Azul',
+            'marron': 'Marrón',
+            'negro': 'Negro 1º Dan',
+            'negro-2dan': 'Negro 2º Dan - Tigre Rojo'
+        };
+
+        doc.text(`Cinturón Objetivo: ${ beltEmojis[currentStudent.cinturon] } ${ beltNames[currentStudent.cinturon] } `, 14, 66);
+        doc.text(`Fecha de Registro: ${ new Date(currentStudent.fechaRegistro).toLocaleDateString('es-ES') } `, 14, 74);
+
+        // Progress Summary
+        const progress = calculateOverallProgress(currentStudent);
+        doc.setFont(undefined, 'bold');
+        doc.text('Resumen de Progreso', 14, 87);
+
+        doc.setFont(undefined, 'normal');
+        doc.text(`Progreso General: ${ progress.percentage }% `, 14, 95);
+        doc.text(`Total Completado: ${ progress.completed.toLocaleString('es-ES') } repeticiones`, 14, 103);
+        doc.text(`Total Requerido: ${ progress.required.toLocaleString('es-ES') } repeticiones`, 14, 111);
+        doc.text(`Pendiente: ${ progress.pending.toLocaleString('es-ES') } repeticiones`, 14, 119);
+
+        // Techniques Table
+        doc.setFont(undefined, 'bold');
+        doc.text('Progreso por Técnica', 14, 132);
+
+        const tableData = [];
+        EXERCISES.forEach(tech => {
+            const required = BELT_REQUIREMENTS[currentStudent.cinturon][tech.id];
+            const leftCompleted = currentStudent.ejercicios[tech.id]?.izquierda || 0;
+            const rightCompleted = currentStudent.ejercicios[tech.id]?.derecha || 0;
+            const totalCompleted = leftCompleted + rightCompleted;
+            const totalRequired = required * 2; // Both legs
+            const percentage = totalRequired > 0 ? Math.round((totalCompleted / totalRequired) * 100) : 0;
+
+            tableData.push([
+                tech.name,
+                leftCompleted.toLocaleString('es-ES'),
+                rightCompleted.toLocaleString('es-ES'),
+                totalCompleted.toLocaleString('es-ES'),
+                totalRequired.toLocaleString('es-ES'),
+                `${ percentage }% `
+            ]);
+        });
+
+        doc.autoTable({
+            startY: 137,
+            head: [['Técnica', 'Izq.', 'Der.', 'Total', 'Requerido', 'Progreso']],
+            body: tableData,
+            theme: 'striped',
+            headStyles: {
+                fillColor: [244, 165, 0],
+                textColor: [26, 26, 46],
+                fontStyle: 'bold',
+                halign: 'center'
+            },
+            bodyStyles: {
+                textColor: [60, 60, 60],
+                halign: 'center'
+            },
+            columnStyles: {
+                0: { halign: 'left', cellWidth: 50 },
+                1: { cellWidth: 20 },
+                2: { cellWidth: 20 },
+                3: { cellWidth: 25 },
+                4: { cellWidth: 30 },
+                5: { cellWidth: 25, fontStyle: 'bold', textColor: [244, 165, 0] }
+            },
+            margin: { left: 14, right: 14 }
+        });
+
+        // Footer
+        const pageCount = doc.internal.getNumberOfPages();
+        const pageHeight = doc.internal.pageSize.height;
+
+        for (let i = 1; i <= pageCount; i++) {
+            doc.setPage(i);
+            doc.setFontSize(8);
+            doc.setTextColor(150, 150, 150);
+            doc.text(
+                `Página ${ i } de ${ pageCount } - Ki Full Katai © ${ new Date().getFullYear() } `,
+                105,
+                pageHeight - 10,
+                { align: 'center' }
+            );
+        }
+
+        // Save PDF
+        const fileName = `KiFull_${ currentStudent.nombre }_${ currentStudent.apellidos }_${ new Date().toISOString().split('T')[0] }.pdf`;
+        doc.save(fileName);
+
+        hideLoading();
+
+    } catch (error) {
+        console.error('Error generating PDF:', error);
+        alert('Error al generar el PDF. Por favor, intenta de nuevo.');
+        hideLoading();
+    }
+});
+
+// ===================================
+// Session Management Functions  
+// ===================================
+
+// Login existing student by email
+async function loginStudent(email) {
+    try {
+        showLoading();
+
+        const studentsRef = collection(db, 'students');
+        const q = query(studentsRef, where('email', '==', email.toLowerCase().trim()));
+        const querySnapshot = await getDocs(q);
+
+        if (querySnapshot.empty) {
+            hideLoading();
+            showToast('Email no encontrado. ¿Quieres registrarte?');
+            return null;
+        }
+
+        const studentDoc = querySnapshot.docs[0];
+        const studentData = {
+            firestoreId: studentDoc.id,
+            ...studentDoc.data()
+        };
+
+        hideLoading();
+        return studentData;
+    } catch (error) {
+        console.error('Error en login:', error);
+        hideLoading();
+        showToast('Error al iniciar sesión');
+        return null;
+    }
+}
+
+// Register new student with unique email
+async function registerStudentWithEmail(nombre, apellidos, email, cinturon) {
+    try {
+        showLoading();
+
+        // Check if email already exists
+        const studentsRef = collection(db, 'students');
+        const q = query(studentsRef, where('email', '==', email.toLowerCase().trim()));
+        const querySnapshot = await getDocs(q);
+
+        if (!querySnapshot.empty) {
+            hideLoading();
+            showToast('Este email ya está registrado');
+            return null;
+        }
+
+        // Create new student
+        const requirements = BELT_REQUIREMENTS[cinturon];
+        const ejercicios = {};
+
+        Object.keys(requirements).forEach(exerciseId => {
+            ejercicios[exerciseId] = {
+                izquierda: 0,
+                derecha: 0
+            };
+        });
+
+        const newStudent = {
+            nombre,
+            apellidos,
+            email: email.toLowerCase().trim(),
+            cinturon,
+            fechaRegistro: new Date().toISOString(),
+            totalRepeticiones: ejercicios
+        };
+
+        const docRef = await addDoc(collection(db, 'students'), newStudent);
+
+        hideLoading();
+        showToast('¡Registro exitoso!');
+
+        return {
+            firestoreId: docRef.id,
+            ...newStudent
+        };
+    } catch (error) {
+        console.error('Error en registro:', error);
+        hideLoading();
+        showToast('Error al registrar');
+        return null;
+    }
+}
+
+// Create new training session
+async function createTrainingSession(studentId, repeticiones, notas = '') {
+    try {
+        showLoading();
+
+        const sessionData = {
+            fecha: new Date().toISOString(),
+            repeticiones,
+            notas: notas.trim()
+        };
+
+        // Add session to subcollection
+        const sessionsRef = collection(db, 'students', studentId, 'sessions');
+        await addDoc(sessionsRef, sessionData);
+
+        // Update student's total repetitions
+        const studentRef = doc(db, 'students', studentId);
+        const newTotals = { ...currentStudent.totalRepeticiones };
+
+        Object.keys(repeticiones).forEach(exerciseId => {
+            if (!newTotals[exerciseId]) {
+                newTotals[exerciseId] = { izquierda: 0, derecha: 0 };
+            }
+            newTotals[exerciseId].izquierda += repeticiones[exerciseId].izquierda || 0;
+            newTotals[exerciseId].derecha += repeticiones[exerciseId].derecha || 0;
+        });
+
+        await updateDoc(studentRef, {
+            totalRepeticiones: newTotals
+        });
+
+        // Update current student
+        currentStudent.totalRepeticiones = newTotals;
+
+        hideLoading();
+        showToast('Sesión guardada exitosamente! 🎉');
+
+        return true;
+    } catch (error) {
+        console.error('Error al crear sesión:', error);
+        hideLoading();
+        showToast('Error al guardar la sesión');
+        return false;
+    }
+}
+
+// Get all training sessions for a student
+async function getStudentSessions(studentId) {
+    try {
+        const sessionsRef = collection(db, 'students', studentId, 'sessions');
+        const q = query(sessionsRef, orderBy('fecha', 'desc'));
+        const querySnapshot = await getDocs(q);
+
+        const sessions = [];
+        querySnapshot.forEach((doc) => {
+            sessions.push({
+                id: doc.id,
+                ...doc.data()
+            });
+        });
+
+        return sessions;
+    } catch (error) {
+        console.error('Error al obtener sesiones:', error);
+        return [];
+    }
+}
+
+// Render sessions history
+function renderSessionsHistory(sessions) {
+    const container = document.getElementById('sessionsList');
+
+    if (!sessions || sessions.length === 0) {
+        container.innerHTML = `
+            < div class="empty-state" >
+                <p>📅 Aún no has registrado ninguna sesión</p>
+                <p>Crea tu primera sesión en la pestaña "Nueva Sesión"</p>
+            </div >
+            `;
+        return;
+    }
+
+    container.innerHTML = sessions.map(session => {
+        const date = new Date(session.fecha);
+        const formattedDate = date.toLocaleString('es-ES', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+
+        let totalSession = 0;
+        const techniquesList = Object.entries(session.repeticiones).map(([id, reps]) => {
+            const exercise = EXERCISES.find(ex => ex.id === id);
+            const total = (reps.izquierda || 0) + (reps.derecha || 0);
+            totalSession += total;
+            return `
+            < div class="session-technique" >
+                <strong>${exercise?.name || id}:</strong> 
+                    ${ reps.izquierda } + ${ reps.derecha } = ${ total }
+                </div >
+            `;
+        }).join('');
+
+        const notesHtml = session.notas ? `
+            < div class="session-notes" >
+                💭 ${ session.notas }
+            </div >
+            ` : '';
+
+        return `
+            < div class="session-card" >
+                <div class="session-header">
+                    <div class="session-date">📅 ${formattedDate}</div>
+                    <div class="session-total">Total: ${totalSession.toLocaleString('es-ES')} reps</div>
+                </div>
+                <div class="session-techniques">
+                    ${techniquesList}
+                </div>
+                ${ notesHtml }
+            </div >
+            `;
+    }).join('');
+}
+

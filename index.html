@@ -36,11 +36,27 @@
 
             <!-- Welcome/Registration View -->
             <section id="welcomeView" class="view active">
-                <div class="welcome-card">
-                    <h2 class="section-title">Bienvenido al Sistema de Exámenes</h2>
-                    <p class="section-description">Registra tu progreso hacia el siguiente nivel de cinturón</p>
+                <div class="card welcome-card">
+                    <h2>Bienvenido al Sistema de Exámenes</h2>
+                    <p class="card-description">Registra tu progreso hacia el siguiente nivel de cinturón</p>
 
-                    <form id="registrationForm" class="registration-form">
+                    <!-- Login/Register Toggle -->
+                    <div class="auth-toggle">
+                        <button class="auth-toggle-btn active" data-mode="login">Iniciar Sesión</button>
+                        <button class="auth-toggle-btn" data-mode="register">Registrarse</button>
+                    </div>
+
+                    <!-- Login Form -->
+                    <form id="loginForm" class="auth-form">
+                        <div class="form-group">
+                            <label for="loginEmail">Email</label>
+                            <input type="email" id="loginEmail" required placeholder="tu.email@ejemplo.com">
+                        </div>
+                        <button type="submit" class="btn btn-primary">Iniciar Sesión</button>
+                    </form>
+
+                    <!-- Register Form -->
+                    <form id="registerForm" class="auth-form" style="display: none;">
                         <div class="form-group">
                             <label for="nombre">Nombre</label>
                             <input type="text" id="nombre" required placeholder="Tu nombre">
@@ -49,6 +65,11 @@
                         <div class="form-group">
                             <label for="apellidos">Apellidos</label>
                             <input type="text" id="apellidos" required placeholder="Tus apellidos">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="registerEmail">Email</label>
+                            <input type="email" id="registerEmail" required placeholder="tu.email@ejemplo.com">
                         </div>
 
                         <div class="form-group">
@@ -65,13 +86,14 @@
                             </select>
                         </div>
 
-                        <button type="submit" class="btn btn-primary">Comenzar Mi Entrenamiento</button>
+                        <button type="submit" class="btn btn-primary">Registrarse</button>
                     </form>
 
                     <div class="admin-access">
                         <button id="btnAdminAccess" class="btn btn-ghost">Acceso Administrador</button>
                     </div>
                 </div>
+
             </section>
 
             <!-- Student Dashboard -->
@@ -86,7 +108,8 @@
 
                 <!-- Tabs Navigation -->
                 <div class="tabs">
-                    <button class="tab-btn active" data-tab="registro">📝 Registro Diario</button>
+                    <button class="tab-btn active" data-tab="registro">📝 Nueva Sesión</button>
+                    <button class="tab-btn" data-tab="historial">📅 Historial</button>
                     <button class="tab-btn" data-tab="progreso">📊 Mi Progreso</button>
                     <button class="tab-btn" data-tab="tecnicas">🥋 Guía de Técnicas</button>
                     <button class="tab-btn" data-tab="requisitos">📋 Requisitos por Cinturón</button>
@@ -103,6 +126,22 @@
 
                             <button type="submit" class="btn btn-primary">Guardar Progreso</button>
                         </form>
+                    </div>
+                </div>
+
+                <!-- Tab: Session History -->
+                <div id="tabHistorial" class="tab-content">
+                    <div class="card">
+                        <h3>Historial de Sesiones</h3>
+                        <p class="card-description">Visualiza todas tus sesiones de entrenamiento</p>
+
+                        <div id="sessionsList" class="sessions-list">
+                            <!-- Sessions will be loaded here dynamically -->
+                            <div class="empty-state">
+                                <p>📅 Aún no has registrado ninguna sesión</p>
+                                <p>Crea tu primera sesión en la pestaña "Nueva Sesión"</p>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
