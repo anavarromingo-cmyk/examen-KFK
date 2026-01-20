@@ -204,17 +204,26 @@ const BELT_NAMES = {
 let currentStudent = null;
 let allStudents = [];
 
-// Load students from localStorage
-function loadStudents() {
-    const stored = localStorage.getItem('kifull_students');
-    if (stored) {
-        allStudents = JSON.parse(stored);
-    }
-}
+// Load all students from Firestore (for admin panel)
+async function loadAllStudents() {
+    try {
+        const studentsRef = collection(db, 'students');
+        const querySnapshot = await getDocs(studentsRef);
 
-// Save students to localStorage
-function saveStudents() {
-    localStorage.setItem('kifull_students', JSON.stringify(allStudents));
+        allStudents = [];
+        querySnapshot.forEach((doc) => {
+            allStudents.push({
+                firestoreId: doc.id,
+                ...doc.data()
+            });
+        });
+
+        return allStudents;
+    } catch (error) {
+        console.error('Error loading students:', error);
+        showToast('Error al cargar estudiantes');
+        return [];
+    }
 }
 // ===================================
 // Session Management System
@@ -760,7 +769,7 @@ document.getElementById('btnCancelAdmin').addEventListener('click', () => {
     document.getElementById('adminPassword').value = '';
 });
 
-document.getElementById('adminLoginForm').addEventListener('submit', (e) => {
+document.getElementById('adminLoginForm').addEventListener('submit', async (e) => {
     e.preventDefault();
 
     const password = document.getElementById('adminPassword').value;
@@ -769,6 +778,9 @@ document.getElementById('adminLoginForm').addEventListener('submit', (e) => {
         document.getElementById('adminLoginModal').classList.remove('active');
         document.getElementById('adminPassword').value = '';
         showView('adminView');
+
+        // Load all students from Firestore
+        await loadAllStudents();
         renderAllStudentsProgress();
     } else {
         showToast('Contraseña incorrecta');
