@@ -813,10 +813,21 @@ function renderAllStudentsProgress() {
         let totalRequired = 0;
 
         EXERCISES.forEach(exercise => {
-            const ejercicioData = student.ejercicios[exercise.id];
+            // Support both old (ejercicios) and new (totalRepeticiones) structure
+            const repeticiones = student.totalRepeticiones?.[exercise.id] ||
+                student.ejercicios?.[exercise.id] ||
+                { izquierda: 0, derecha: 0 };
             const requirement = requirements[exercise.id];
 
-            totalCompleted += ejercicioData.izquierda.total + ejercicioData.derecha.total;
+            // Handle both structures
+            const izq = repeticiones.izquierda?.total !== undefined
+                ? repeticiones.izquierda.total
+                : (repeticiones.izquierda || 0);
+            const der = repeticiones.derecha?.total !== undefined
+                ? repeticiones.derecha.total
+                : (repeticiones.derecha || 0);
+
+            totalCompleted += izq + der;
             totalRequired += requirement * 2;
         });
 
